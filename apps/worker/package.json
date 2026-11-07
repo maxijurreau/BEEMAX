@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run test/sovereignAuth.spec.ts"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7"
   }
 }

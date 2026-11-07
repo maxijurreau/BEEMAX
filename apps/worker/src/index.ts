@@ -1,6 +1,7 @@
 import { captureIntelligence } from "./universe-api.js";
 import { reconcileCompensation } from "./execution.js";
 import { protectPortal, auditAccess } from "./access.js";
+import { verifySovereignAccess } from "./middleware/sovereignAuth.js";
 import kernel from "./kernel.js";
 import { routeApi } from "./routes/api.js";
 import { telemetryStatsApi } from "./routes/telemetry.js";
@@ -40,7 +41,7 @@ export default {
     if (origin && allowed.includes(origin)) {
       headers.set("Access-Control-Allow-Origin", origin);
       headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-QAL-Signature, X-QAL-Timestamp, X-QAL-Identity");
     }
     if (origin && !allowed.includes(origin))
       return Response.json({ error: "Origin not allowed" }, { status: 403, headers });
@@ -72,6 +73,20 @@ export default {
         ctx.waitUntil(auditAccess(env, request, null, access.status));
         headers.forEach((value, key) => access.headers.set(key, value));
         return access;
+      }
+
+      const sovereignRoute = path.startsWith("/api/manifold/") || path.startsWith("/api/storefront/");
+      if (sovereignRoute) {
+        const sovereignAccess = await verifySovereignAccess(request, env);
+        if (!sovereignAccess.authorized) {
+          const response = Response.json({
+            error: "Sovereign Access Denied",
+            reason: sovereignAccess.tier,
+            protocol: "BEEMAX-V1",
+          }, { status: 402, headers });
+          ctx.waitUntil(auditAccess(env, request, null, response.status));
+          return response;
+        }
       }
 
       const telemetry = await telemetryStatsApi(request, env);

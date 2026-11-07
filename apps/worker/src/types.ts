@@ -16,6 +16,8 @@ export interface Env {
   FACTORY_ACTOR?: DurableObjectNamespace;
   INSTANT_SPACE?: DurableObjectNamespace;
   DB: D1Database;
+  SOVEREIGN_LEDGER?: D1Database;
+  SOVEREIGN_PUBLIC_KEY?: string;
   MICROKERNEL_ACTOR?: DurableObjectNamespace;
   ALLOWED_ORIGINS?: string;
   GOVERNOR_API_TOKEN?: string;
