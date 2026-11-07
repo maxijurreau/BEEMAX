@@ -28,7 +28,7 @@ describe("sovereignAuth Middleware", () => {
   });
 
   function createSignedHeaders(url: string, timestamp: string, identity: string, signingKey = privateKeyBytes) {
-    const payload = `${new URL(url).pathname}:${timestamp}:${identity}`;
+    const payload = `${new URL(url).pathname}:${timestamp}:${identity.trim().toLowerCase()}`;
     const signature = ed25519.sign(new TextEncoder().encode(payload), signingKey);
     return {
       "X-QAL-Signature": bytesToHex(signature),
@@ -42,7 +42,19 @@ describe("sovereignAuth Middleware", () => {
       new Request("https://beemax.internal/api/manifold/compute"), mockEnv,
     );
     expect(result.authorized).toBe(false);
-    expect(result.tier).toBe("missing_headers");
+    expect(result.tier).toBe("invalid_identity");
+  });
+
+  it("rejects anonymous identities without querying D1", async () => {
+    const result = await verifySovereignAccess(
+      new Request("https://beemax.internal/api/manifold/compute", {
+        headers: { "X-QAL-Identity": " Anonymous " },
+      }),
+      mockEnv,
+    );
+    expect(result.authorized).toBe(false);
+    expect(result.tier).toBe("invalid_identity");
+    expect(mockPrepare).not.toHaveBeenCalled();
   });
 
   it("rejects timestamps outside the five-minute replay window", async () => {
@@ -54,7 +66,7 @@ describe("sovereignAuth Middleware", () => {
     expect(result.tier).toBe("expired_timestamp");
   });
 
-  it("rejects an unconfigured public key", async () => {
+  it("rejects an unconfigured public key or ledger", async () => {
     const url = "https://beemax.internal/api/manifold/compute";
     const timestamp = String(Date.now());
     const request = new Request(url, { headers: createSignedHeaders(url, timestamp, testIdentity) });
@@ -83,8 +95,8 @@ describe("sovereignAuth Middleware", () => {
     expect(result.tier).toBe("unlicensed");
   });
 
-  it("rejects an expired D1 license", async () => {
-    mockLicenseRecord = { tier: "standard", expires_at: Date.now() - 1000 };
+  it("rejects a license expiring at or before the current time", async () => {
+    mockLicenseRecord = { tier: "standard", expires_at: Date.now() - 1 };
     const url = "https://beemax.internal/api/manifold/compute";
     const timestamp = String(Date.now());
     const request = new Request(url, { headers: createSignedHeaders(url, timestamp, testIdentity) });
@@ -102,8 +114,8 @@ describe("sovereignAuth Middleware", () => {
     expect(result).toEqual({ authorized: true, tier: "sovereign", identity: testIdentity });
   });
 
-  it("authorizes a lifetime license with a null expiry", async () => {
-    mockLicenseRecord = { tier: "enterprise", expires_at: null };
+  it.each([null, 0])("authorizes a lifetime license with expires_at=%s", async (expires_at) => {
+    mockLicenseRecord = { tier: "enterprise", expires_at };
     const url = "https://beemax.internal/api/storefront/download";
     const timestamp = String(Date.now());
     const request = new Request(url, { headers: createSignedHeaders(url, timestamp, testIdentity) });

@@ -108,7 +108,7 @@ export default {
           return response;
         }
         const response = await streamTokenApi(env);
-        headers.forEach((value, key) => response.headers.set(value, key));
+        headers.forEach((value, key) => response.headers.set(key, value));
         ctx.waitUntil(auditAccess(env, request, access, response.status));
         return response;
       }
